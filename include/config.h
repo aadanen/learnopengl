@@ -1,0 +1,1 @@
+#define LEARNOPENGL_VERSION 1
