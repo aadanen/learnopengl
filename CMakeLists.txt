@@ -5,10 +5,12 @@ project(learnopengl)
 set(GLAD_DIR "lib/GLAD")
 set(GLFW_DIR "lib/glfw-3.5.1")
 set(IMGUI_DIR "lib/imgui")
+set(ASSIMP_DIR "lib/assimp")
 
 add_executable(learnopengl)
 add_subdirectory(${GLFW_DIR})
 add_subdirectory(${IMGUI_DIR})
+add_subdirectory(${ASSIMP_DIR})
 
 target_include_directories(learnopengl 
   PUBLIC
@@ -21,6 +23,8 @@ target_include_directories(learnopengl
     ${IMGUI_DIR}/
   PUBLIC
     ${IMGUI_DIR}/backends
+  PUBLIC
+    ${ASSIMP_DIR}/include
 )
 
 target_sources(learnopengl
@@ -31,7 +35,4 @@ target_sources(learnopengl
     ${IMGUI_SRC}
 )
 
-target_link_libraries(learnopengl PUBLIC glfw)
-
-
-
+target_link_libraries(learnopengl PUBLIC glfw assimp)

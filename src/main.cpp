@@ -3,6 +3,7 @@
 #include <GLFW/glfw3.h>
 
 #include <color.h>
+#include <model.h>
 #include <camera.h>
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -214,7 +215,8 @@ Light lights[MAX_LIGHTS] = {
   },
   {
     POINT,
-    glm::vec4(2.0f, 1.5f, -2.0f, 1.0f),
+    //glm::vec4(2.0f, 1.5f, -2.0f, 1.0f),
+    glm::vec4(0.4f, 1.5f, 0.7f, 1.0f),
     glm::vec4(0.0f),
     glm::vec3(RGB(white)),
     glm::vec3(RGB(white)),
@@ -511,7 +513,12 @@ int main() {
 
   glViewport(0, 0, mode->width, mode->height);
   glEnable(GL_DEPTH_TEST);
+  stbi_set_flip_vertically_on_load(true);
 
+  unsigned int phong = loadShader("phong");
+  unsigned int lightcube = loadShader("lightcube");
+  unsigned int phong_model = loadShader("phong_model");
+  
   // setup IMGUI
   // Setup Dear ImGui context
   IMGUI_CHECKVERSION();
@@ -526,7 +533,6 @@ int main() {
   // Setup scaling
   ImGuiStyle& style = ImGui::GetStyle();
   style.FontScaleDpi = 2.0;
-
 
   unsigned int VAO, VBO;
   glGenVertexArrays(1, &VAO);
@@ -546,11 +552,8 @@ int main() {
                         (void *)(6 * sizeof(float)));
   glEnableVertexAttribArray(2);
 
-  unsigned int phong = loadShader("phong");
-  unsigned int lightcube = loadShader("lightcube");
 
   glBindVertexArray(VAO);
-  stbi_set_flip_vertically_on_load(true);
   glActiveTexture(GL_TEXTURE0);
   unsigned int container_diffuse = loadTexture("resources/container2.png");
   box_mat.diffuse_map = container_diffuse;
@@ -572,6 +575,12 @@ int main() {
   glUniformMatrix4fv(glGetUniformLocation(lightcube, "projection"), 1, GL_FALSE,
                      glm::value_ptr(projection));
 
+  glUseProgram(phong_model);
+  glUniformMatrix4fv(glGetUniformLocation(phong_model, "projection"), 1, GL_FALSE,
+                     glm::value_ptr(projection));
+
+  Model backpack("resources/backpack/backpack.obj");
+
   while (!glfwWindowShouldClose(window)) {
     currentFrame = glfwGetTime();
     deltaTime = currentFrame - lastFrame;
@@ -580,6 +589,7 @@ int main() {
     processInput(window);
 
 
+    //glClearColor(RGBA(sky));
     glClearColor(RGBA(sky));
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -588,12 +598,12 @@ int main() {
     glm::mat4 view_no_translation = view;
     view_no_translation[3] = glm::vec4(0.0f);
     glUseProgram(phong);
+    glUniformMatrix4fv(glGetUniformLocation(phong, "view"), 1, GL_FALSE,
+                       glm::value_ptr(view));
     char uniform_name[32];
     for (int i = 0; i < n_lights; i++) {
       sprintf(uniform_name, "lights[%d].type", i);
       glUniform1i(glGetUniformLocation(phong, uniform_name), lights[i].type);
-      glUniformMatrix4fv(glGetUniformLocation(phong, "view"), 1, GL_FALSE,
-                         glm::value_ptr(view));
       sprintf(uniform_name, "lights[%d].position", i);
       glUniform4f(glGetUniformLocation(phong, uniform_name),
                   XYZA(glm::vec4(view * lights[i].position)));
@@ -623,6 +633,7 @@ int main() {
       sprintf(uniform_name, "lights[%d].enabled", i);
       glUniform1i(glGetUniformLocation(phong, uniform_name), lights[i].enabled);
     }
+    glBindVertexArray(VAO);
     for (int i = 0; i < n_objects; i++) {
       glm::mat4 model = glm::mat4(1.0f);
       model = glm::translate(model, objects[i].position);
@@ -630,14 +641,63 @@ int main() {
       glUniformMatrix4fv(glGetUniformLocation(phong, "model"), 1, GL_FALSE,
                          glm::value_ptr(model));
       setUniformMaterial(phong, objects[i].material);
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D, objects[i].material.diffuse_map);
+      glActiveTexture(GL_TEXTURE1);
+      glBindTexture(GL_TEXTURE_2D, objects[i].material.specular_map);
       glDrawArrays(GL_TRIANGLES, 0, 36);
     }
 
+    // render the loaded model
+    glUseProgram(phong_model);
+    for (int i = 0; i < n_lights; i++) {
+      sprintf(uniform_name, "lights[%d].type", i);
+      glUniform1i(glGetUniformLocation(phong_model, uniform_name), lights[i].type);
+      sprintf(uniform_name, "lights[%d].position", i);
+      glUniform4f(glGetUniformLocation(phong_model, uniform_name),
+                  XYZA(glm::vec4(view * lights[i].position)));
+      glm::vec4 lpv = view_no_translation * lights[i].direction;
+      sprintf(uniform_name, "lights[%d].direction", i);
+      glUniform4f(glGetUniformLocation(phong_model, uniform_name),
+                  XYZA(lpv));
+      sprintf(uniform_name, "lights[%d].ambient", i);
+      glUniform3f(glGetUniformLocation(phong_model, uniform_name),
+                  XYZ(lights[i].ambient));
+      sprintf(uniform_name, "lights[%d].diffuse", i);
+      glUniform3f(glGetUniformLocation(phong_model, uniform_name),
+                  XYZ(lights[i].diffuse));
+      sprintf(uniform_name, "lights[%d].specular", i);
+      glUniform3f(glGetUniformLocation(phong_model, uniform_name),
+                  XYZ(lights[i].specular));
+      sprintf(uniform_name, "lights[%d].a", i);
+      glUniform1f(glGetUniformLocation(phong_model, uniform_name), lights[i].a);
+      sprintf(uniform_name, "lights[%d].b", i);
+      glUniform1f(glGetUniformLocation(phong_model, uniform_name), lights[i].b);
+      sprintf(uniform_name, "lights[%d].c", i);
+      glUniform1f(glGetUniformLocation(phong_model, uniform_name), lights[i].c);
+      sprintf(uniform_name, "lights[%d].cutoff_inner", i);
+      glUniform1f(glGetUniformLocation(phong_model, uniform_name), glm::cos(glm::radians(lights[i].cutoff_inner)));
+      sprintf(uniform_name, "lights[%d].cutoff_outer", i);
+      glUniform1f(glGetUniformLocation(phong_model, uniform_name), glm::cos(glm::radians(lights[i].cutoff_outer)));
+      sprintf(uniform_name, "lights[%d].enabled", i);
+      glUniform1i(glGetUniformLocation(phong_model, uniform_name), lights[i].enabled);
+    }
+    glUniformMatrix4fv(glGetUniformLocation(phong_model, "view"), 1, GL_FALSE,
+                       glm::value_ptr(view));
+    glm::mat4 model = glm::mat4(1.0f);
+    model = glm::translate(model, glm::vec3(-2.0f, 0.5f, -1.0f)); // translate it down so it's at the center of the scene
+    model = glm::scale(model, glm::vec3(0.25f, 0.25f, 0.25f));	// it's a bit too big for our scene, so scale it down
+    setUniformMaterial(phong_model, box_mat);
+    glUniformMatrix4fv(glGetUniformLocation(phong_model, "model"), 1, GL_FALSE,
+                       glm::value_ptr(model));
+    backpack.Draw(phong_model);
+
+    glUseProgram(lightcube);
+    glUniformMatrix4fv(glGetUniformLocation(lightcube, "view"), 1, GL_FALSE,
+                       glm::value_ptr(view));
+    glBindVertexArray(VAO);
     for (int i = 0; i < n_lights; i++) {
       if (lights[i].enabled) {
-        glUseProgram(lightcube);
-        glUniformMatrix4fv(glGetUniformLocation(lightcube, "view"), 1, GL_FALSE,
-                           glm::value_ptr(view));
         glm::mat4 model = glm::mat4(1.0f);
         model = glm::translate(model, glm::vec3(XYZ(lights[i].position)));
         model = glm::scale(model, glm::vec3(0.1f));
@@ -648,7 +708,7 @@ int main() {
         glDrawArrays(GL_TRIANGLES, 0, 36);
       }
     }
-
+    
     // Rendering
     // (Your code clears your framebuffer, renders your other stuff etc.)
     // Start the Dear ImGui frame
@@ -707,7 +767,7 @@ int main() {
             ImGui::Checkbox("enabled", &lights[i].enabled);
 
             ImGui::Text("attenuation: 1/(ax^2 + bx + c)");
-            ImGui::DragFloat("a", &lights[i].a, 0.0001f, 0.5f, 1.0f, "%.3f", flags);
+            ImGui::DragFloat("a", &lights[i].a, 0.0001f, 0.000007f, 1.8f, "%.3f", flags);
             ImGui::DragFloat("b", &lights[i].b, 0.0001f, 0.0014f, 0.7f, "%.3f", flags);
             ImGui::DragFloat("c", &lights[i].c, 0.0001f, 0.000007, 1.8f, "%.3f", flags);
 

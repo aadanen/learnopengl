@@ -25,7 +25,7 @@ unsigned char hex2dec(char ch) {
     return 10 + ch - 'A';
   if (islower(ch))
     return 10 + ch - 'a';
-  assert(0);
+  return '\0';
 }
 
 Color::Color(const char *hex) {
